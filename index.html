@@ -3,22 +3,42 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>Web Screen Recorder</title>
+    <title>Web Screen Recorder (High Quality)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body {
             font-family: system-ui, sans-serif;
             padding: 20px;
+            line-height: 1.45;
+        }
+
+        h2 {
+            margin: 0 0 10px;
+        }
+
+        .row {
+            margin: 10px 0;
         }
 
         button {
             margin-right: 8px;
+            padding: 8px 12px;
+        }
+
+        label {
+            margin-right: 12px;
+        }
+
+        #stageWrap {
+            position: relative;
+            display: inline-block;
         }
 
         #preview {
-            width: 480px;
+            width: 640px;
             max-width: 100%;
-            margin-top: 12px;
             background: #000;
+            margin-top: 12px;
         }
 
         #camOverlay {
@@ -31,21 +51,57 @@
             border: 2px solid #fff;
         }
 
-        #stageWrap {
-            position: relative;
-            display: inline-block;
+        #camOverlay[hidden] {
+            display: none;
+        }
+
+        #log {
+            font-size: 12px;
+            white-space: pre-wrap;
+            opacity: .85;
+            margin-top: 12px;
+            max-height: 180px;
+            overflow: auto;
         }
     </style>
 </head>
 
 <body>
-    <h2>Screen Recorder</h2>
-    <div>
+    <h2>Screen Recorder (High Quality)</h2>
+
+    <div class="row">
         <label><input type="checkbox" id="withMic" checked /> Mic</label>
         <label><input type="checkbox" id="withCam" /> Webcam overlay</label>
         <label><input type="checkbox" id="withSysAudio" checked /> Try system/tab audio</label>
+        <label><input type="checkbox" id="smoothOff" /> Disable image smoothing (sharper UI text)</label>
     </div>
-    <div style="margin:10px 0;">
+
+    <div class="row">
+        <label>FPS:
+            <select id="fps">
+                <option value="30">30</option>
+                <option value="60" selected>60</option>
+            </select>
+        </label>
+        <label>Video bitrate:
+            <select id="vbr">
+                <option value="8000000">8 Mbps (1080p30)</option>
+                <option value="12000000" selected>12 Mbps (1080p60)</option>
+                <option value="20000000">20 Mbps (1440p30-60)</option>
+                <option value="35000000">35 Mbps (4K30)</option>
+                <option value="60000000">60 Mbps (4K60+)</option>
+            </select>
+        </label>
+        <label>Audio bitrate:
+            <select id="abr">
+                <option value="128000">128 kbps</option>
+                <option value="160000">160 kbps</option>
+                <option value="192000" selected>192 kbps</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="row">
         <button id="startBtn">Start</button>
         <button id="pauseBtn" disabled>Pause</button>
         <button id="resumeBtn" disabled>Resume</button>
@@ -57,144 +113,217 @@
         <video id="camOverlay" playsinline autoplay muted hidden></video>
     </div>
 
+    <div id="log"></div>
+
     <script>
         let displayStream, micStream, camStream, mixedStream, recorder;
         let chunks = [];
         let audioCtx, destination;
-        let canvas, canvasCtx, canvasStream, animId;
+        let canvas, ctx, canvasStream, animId;
+        let dispVideo, camVideo;
+        let usingRVFC = false;
 
-        const startBtn = document.getElementById('startBtn');
-        const pauseBtn = document.getElementById('pauseBtn');
-        const resumeBtn = document.getElementById('resumeBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const preview = document.getElementById('preview');
-        const camOverlay = document.getElementById('camOverlay');
+        const $ = s => document.querySelector(s);
+        const log = (...args) => { const el = $('#log'); el.textContent += args.join(' ') + '\n'; el.scrollTop = el.scrollHeight; console.log(...args); };
+
+        const startBtn = $('#startBtn');
+        const pauseBtn = $('#pauseBtn');
+        const resumeBtn = $('#resumeBtn');
+        const stopBtn = $('#stopBtn');
+        const preview = $('#preview');
+        const camOverlay = $('#camOverlay');
+
+        function pickSupportedMime(candidates) {
+            return candidates.find(MediaRecorder.isTypeSupported) || '';
+        }
 
         async function start() {
-            const withMic = document.getElementById('withMic').checked;
-            const withCam = document.getElementById('withCam').checked;
-            const withSysAudio = document.getElementById('withSysAudio').checked;
+            try {
+                startBtn.disabled = true;
+                pauseBtn.disabled = true;
+                resumeBtn.disabled = true;
+                stopBtn.disabled = true;
+                $('#log').textContent = '';
 
-            // 1) Get display capture (try system/tab audio when supported)
-            displayStream = await navigator.mediaDevices.getDisplayMedia({
-                video: { frameRate: 30 },
-                audio: withSysAudio ? true : false
-            });
+                const withMic = $('#withMic').checked;
+                const withCam = $('#withCam').checked;
+                const withSysAudio = $('#withSysAudio').checked;
+                const smoothingOff = $('#smoothOff').checked;
+                const fps = parseInt($('#fps').value, 10);
+                const vbr = parseInt($('#vbr').value, 10);
+                const abr = parseInt($('#abr').value, 10);
 
-            // 2) Optional mic
-            if (withMic) {
-                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            }
+                // 1) Display capture: request high frame rate and large size (browser may clamp)
+                displayStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        frameRate: { ideal: fps, max: fps },
+                        width: { ideal: 2560 },   // try QHD
+                        height: { ideal: 1440 },  // try QHD
+                        displaySurface: 'monitor' // hint
+                    },
+                    audio: withSysAudio ? true : false
+                });
 
-            // 3) Optional webcam overlay
-            if (withCam) {
-                camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 } });
-                camOverlay.srcObject = camStream;
-                camOverlay.hidden = false;
-            } else {
-                camOverlay.hidden = true;
-            }
+                // 2) Optional mic with cleaner voice
+                if (withMic) {
+                    micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            channelCount: 1,
+                            sampleRate: 48000,
+                            noiseSuppression: true,
+                            echoCancellation: true,
+                            autoGainControl: false
+                        }
+                    });
+                }
 
-            // 4) Compose video with overlay using a canvas (ensures single video track)
-            const displayVideo = new VideoFrameSource(displayStream);
-            const camVideo = withCam ? new VideoFrameSource(camStream) : null;
+                // 3) Optional webcam overlay
+                if (withCam) {
+                    camStream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 1280, height: 720, frameRate: 30 }
+                    });
+                    camOverlay.srcObject = camStream;
+                    camOverlay.hidden = false;
+                } else {
+                    camOverlay.hidden = true;
+                }
 
-            const trackSettings = displayStream.getVideoTracks()[0].getSettings();
-            const width = trackSettings.width || 1280;
-            const height = trackSettings.height || 720;
+                // 4) Build hidden video sources for composition
+                dispVideo = document.createElement('video');
+                dispVideo.srcObject = displayStream;
+                dispVideo.muted = true;
+                dispVideo.playsInline = true;
+                await dispVideo.play().catch(() => { });
 
-            canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            canvasCtx = canvas.getContext('2d');
+                camVideo = null;
+                if (withCam) {
+                    camVideo = document.createElement('video');
+                    camVideo.srcObject = camStream;
+                    camVideo.muted = true;
+                    camVideo.playsInline = true;
+                    await camVideo.play().catch(() => { });
+                }
 
-            function draw() {
-                canvasCtx.drawImage(displayVideo.video, 0, 0, width, height);
-                if (camVideo) {
+                // 5) Canvas at captured native size (avoid scaling blur)
+                const trackSettings = displayStream.getVideoTracks()[0].getSettings();
+                const width = trackSettings.width || 1920;
+                const height = trackSettings.height || 1080;
+
+                canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                ctx = canvas.getContext('2d', { alpha: false, desynchronize: true });
+                ctx.imageSmoothingEnabled = !smoothingOff;
+
+                function drawCamOverlay() {
                     const w = Math.round(width * 0.25);
                     const h = Math.round(w * 9 / 16);
                     const x = width - w - 16;
                     const y = height - h - 16;
-                    canvasCtx.save();
-                    // rounded rect
                     const r = 12;
-                    canvasCtx.beginPath();
-                    canvasCtx.moveTo(x + r, y);
-                    canvasCtx.arcTo(x + w, y, x + w, y + h, r);
-                    canvasCtx.arcTo(x + w, y + h, x, y + h, r);
-                    canvasCtx.arcTo(x, y + h, x, y, r);
-                    canvasCtx.arcTo(x, y, x + w, y, r);
-                    canvasCtx.closePath();
-                    canvasCtx.clip();
-                    canvasCtx.drawImage(camVideo.video, x, y, w, h);
-                    canvasCtx.restore();
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x + r, y);
+                    ctx.arcTo(x + w, y, x + w, y + h, r);
+                    ctx.arcTo(x + w, y + h, x, y + h, r);
+                    ctx.arcTo(x, y + h, x, y, r);
+                    ctx.arcTo(x, y, x + w, y, r);
+                    ctx.closePath();
+                    ctx.clip();
+                    ctx.drawImage(camVideo, x, y, w, h);
+                    ctx.restore();
                 }
-                animId = requestAnimationFrame(draw);
-            }
 
-            // Helper to make a <video> that auto plays the stream
-            function VideoFrameSource(stream) {
-                this.video = document.createElement('video');
-                this.video.srcObject = stream;
-                this.video.muted = true;
-                this.video.playsInline = true;
-                this.video.autoplay = true;
-                this.video.onloadedmetadata = () => this.video.play().catch(() => { });
-            }
+                // Prefer requestVideoFrameCallback for frame-accurate drawing
+                function drawRAF() {
+                    ctx.drawImage(dispVideo, 0, 0, width, height);
+                    if (camVideo) drawCamOverlay();
+                    animId = requestAnimationFrame(drawRAF);
+                }
+                function drawRVFC() {
+                    ctx.drawImage(dispVideo, 0, 0, width, height);
+                    if (camVideo) drawCamOverlay();
+                    dispVideo.requestVideoFrameCallback(drawRVFC);
+                }
+                usingRVFC = typeof dispVideo.requestVideoFrameCallback === 'function';
+                if (usingRVFC) dispVideo.requestVideoFrameCallback(drawRVFC); else animId = requestAnimationFrame(drawRAF);
 
-            // Start composition
-            draw();
-            canvasStream = canvas.captureStream(30);
+                // 6) Capture canvas at chosen FPS
+                canvasStream = canvas.captureStream(fps);
 
-            // 5) Mix audio: display audio (if any) + mic (if chosen)
-            const tracks = [];
-            if (canvasStream.getVideoTracks().length) {
-                tracks.push(canvasStream.getVideoTracks()[0]);
-            }
+                // 7) Mix audio: display (if any) + mic (if any), with simple leveling
+                const tracks = [];
+                if (canvasStream.getVideoTracks().length) tracks.push(canvasStream.getVideoTracks()[0]);
 
-            const audioTracks = [];
-            if (withSysAudio) {
-                const a = displayStream.getAudioTracks();
-                if (a && a.length) audioTracks.push(new MediaStream(a));
-            }
-            if (withMic) audioTracks.push(micStream);
+                const audioInputs = [];
+                if (withSysAudio) {
+                    const a = displayStream.getAudioTracks();
+                    if (a && a.length) audioInputs.push(new MediaStream(a));
+                }
+                if (withMic) audioInputs.push(micStream);
 
-            if (audioTracks.length) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                destination = audioCtx.createMediaStreamDestination();
+                if (audioInputs.length) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    destination = audioCtx.createMediaStreamDestination();
 
-                audioTracks.forEach(s => {
-                    const src = audioCtx.createMediaStreamSource(s);
-                    // Optional: add gain/filters here
-                    src.connect(destination);
+                    const merger = audioCtx.createGain();
+                    merger.gain.value = 1.0;
+
+                    audioInputs.forEach((s, idx) => {
+                        const src = audioCtx.createMediaStreamSource(s);
+                        const gain = audioCtx.createGain();
+                        gain.gain.value = (withMic && s === micStream) ? 1.0 : 0.85; // keep tab/system audio slightly lower than voice
+
+                        if (withMic && s === micStream) {
+                            // Optional high-pass for voice clarity
+                            const hp = audioCtx.createBiquadFilter();
+                            hp.type = 'highpass';
+                            hp.frequency.value = 90;
+                            src.connect(hp).connect(gain).connect(merger);
+                        } else {
+                            src.connect(gain).connect(merger);
+                        }
+                    });
+
+                    merger.connect(destination);
+                    mixedStream = new MediaStream([...tracks, ...destination.stream.getAudioTracks()]);
+                } else {
+                    mixedStream = new MediaStream(tracks);
+                }
+
+                // 8) Preview the mixed stream (no CSS scaling of canvas; preview is only for monitoring)
+                preview.srcObject = mixedStream;
+                preview.muted = true;
+                await preview.play().catch(() => { });
+
+                // 9) Record with higher quality settings
+                const mime = pickSupportedMime([
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm'
+                ]) || undefined;
+
+                recorder = new MediaRecorder(mixedStream, {
+                    mimeType: mime,
+                    videoBitsPerSecond: vbr,
+                    audioBitsPerSecond: abr
                 });
-                mixedStream = new MediaStream([...tracks, ...destination.stream.getAudioTracks()]);
-            } else {
-                mixedStream = new MediaStream(tracks);
+
+                recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+                recorder.onstop = save;
+                recorder.start(2000); // 2s chunks for continuity and memory safety
+
+                // Controls
+                pauseBtn.disabled = false;
+                stopBtn.disabled = false;
+
+                log('Recording started', `${width}x${height}@${fps}`, 'MIME:', recorder.mimeType || '(default)', 'VBR:', vbr, 'ABR:', abr);
+            } catch (err) {
+                console.error(err);
+                log('Error:', err.message || err);
+                cleanup();
+                startBtn.disabled = false;
             }
-
-            // 6) Preview and record
-            preview.srcObject = mixedStream;
-
-            const mime = pickSupportedMime();
-            recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: 6000000, audioBitsPerSecond: 128000 });
-
-            recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-            recorder.onstop = save;
-            recorder.start(1000); // 1s timeslices for resilience
-
-            startBtn.disabled = true;
-            pauseBtn.disabled = false;
-            stopBtn.disabled = false;
-        }
-
-        function pickSupportedMime() {
-            const candidates = [
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm'
-            ];
-            return candidates.find(MediaRecorder.isTypeSupported) || '';
         }
 
         function pause() {
@@ -202,17 +331,17 @@
                 recorder.pause();
                 pauseBtn.disabled = true;
                 resumeBtn.disabled = false;
+                log('Paused');
             }
         }
-
         function resume() {
             if (recorder && recorder.state === 'paused') {
                 recorder.resume();
                 pauseBtn.disabled = false;
                 resumeBtn.disabled = true;
+                log('Resumed');
             }
         }
-
         function stop() {
             if (recorder && recorder.state !== 'inactive') {
                 recorder.stop();
@@ -222,10 +351,12 @@
             pauseBtn.disabled = true;
             resumeBtn.disabled = true;
             stopBtn.disabled = true;
+            log('Stopped');
         }
 
         function save() {
-            const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
+            const mime = recorder.mimeType || 'video/webm';
+            const blob = new Blob(chunks, { type: mime });
             chunks = [];
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -236,21 +367,22 @@
             a.click();
             URL.revokeObjectURL(url);
             a.remove();
+            log('Saved', a.download, `${(blob.size / 1024 / 1024).toFixed(1)} MB`);
         }
 
         function cleanup() {
-            cancelAnimationFrame(animId);
+            if (!usingRVFC) cancelAnimationFrame(animId);
             [displayStream, micStream, camStream, canvasStream, mixedStream].forEach(s => {
                 if (!s) return;
-                (s.getTracks ? s.getTracks() : []).forEach(t => t.stop());
+                (s.getTracks ? s.getTracks() : []).forEach(t => { try { t.stop(); } catch { } });
             });
-            if (audioCtx) audioCtx.close();
+            if (audioCtx) { try { audioCtx.close(); } catch { } }
         }
 
         startBtn.onclick = start;
         pauseBtn.onclick = pause;
         resumeBtn.onclick = resume;
-        stopBtn.onclick = stop; a
+        stopBtn.onclick = stop;
 
         window.addEventListener('beforeunload', cleanup);
     </script>
