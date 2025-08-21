@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Web Screen Recorder</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            padding: 20px;
+        }
+
+        button {
+            margin-right: 8px;
+        }
+
+        #preview {
+            width: 480px;
+            max-width: 100%;
+            margin-top: 12px;
+            background: #000;
+        }
+
+        #camOverlay {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 200px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #fff;
+        }
+
+        #stageWrap {
+            position: relative;
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Screen Recorder</h2>
+    <div>
+        <label><input type="checkbox" id="withMic" checked /> Mic</label>
+        <label><input type="checkbox" id="withCam" /> Webcam overlay</label>
+        <label><input type="checkbox" id="withSysAudio" checked /> Try system/tab audio</label>
+    </div>
+    <div style="margin:10px 0;">
+        <button id="startBtn">Start</button>
+        <button id="pauseBtn" disabled>Pause</button>
+        <button id="resumeBtn" disabled>Resume</button>
+        <button id="stopBtn" disabled>Stop</button>
+    </div>
+
+    <div id="stageWrap">
+        <video id="preview" playsinline autoplay muted></video>
+        <video id="camOverlay" playsinline autoplay muted hidden></video>
+    </div>
+
+    <script>
+        let displayStream, micStream, camStream, mixedStream, recorder;
+        let chunks = [];
+        let audioCtx, destination;
+        let canvas, canvasCtx, canvasStream, animId;
+
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resumeBtn = document.getElementById('resumeBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const preview = document.getElementById('preview');
+        const camOverlay = document.getElementById('camOverlay');
+
+        async function start() {
+            const withMic = document.getElementById('withMic').checked;
+            const withCam = document.getElementById('withCam').checked;
+            const withSysAudio = document.getElementById('withSysAudio').checked;
+
+            // 1) Get display capture (try system/tab audio when supported)
+            displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: 30 },
+                audio: withSysAudio ? true : false
+            });
+
+            // 2) Optional mic
+            if (withMic) {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            }
+
+            // 3) Optional webcam overlay
+            if (withCam) {
+                camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360 } });
+                camOverlay.srcObject = camStream;
+                camOverlay.hidden = false;
+            } else {
+                camOverlay.hidden = true;
+            }
+
+            // 4) Compose video with overlay using a canvas (ensures single video track)
+            const displayVideo = new VideoFrameSource(displayStream);
+            const camVideo = withCam ? new VideoFrameSource(camStream) : null;
+
+            const trackSettings = displayStream.getVideoTracks()[0].getSettings();
+            const width = trackSettings.width || 1280;
+            const height = trackSettings.height || 720;
+
+            canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvasCtx = canvas.getContext('2d');
+
+            function draw() {
+                canvasCtx.drawImage(displayVideo.video, 0, 0, width, height);
+                if (camVideo) {
+                    const w = Math.round(width * 0.25);
+                    const h = Math.round(w * 9 / 16);
+                    const x = width - w - 16;
+                    const y = height - h - 16;
+                    canvasCtx.save();
+                    // rounded rect
+                    const r = 12;
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(x + r, y);
+                    canvasCtx.arcTo(x + w, y, x + w, y + h, r);
+                    canvasCtx.arcTo(x + w, y + h, x, y + h, r);
+                    canvasCtx.arcTo(x, y + h, x, y, r);
+                    canvasCtx.arcTo(x, y, x + w, y, r);
+                    canvasCtx.closePath();
+                    canvasCtx.clip();
+                    canvasCtx.drawImage(camVideo.video, x, y, w, h);
+                    canvasCtx.restore();
+                }
+                animId = requestAnimationFrame(draw);
+            }
+
+            // Helper to make a <video> that auto plays the stream
+            function VideoFrameSource(stream) {
+                this.video = document.createElement('video');
+                this.video.srcObject = stream;
+                this.video.muted = true;
+                this.video.playsInline = true;
+                this.video.autoplay = true;
+                this.video.onloadedmetadata = () => this.video.play().catch(() => { });
+            }
+
+            // Start composition
+            draw();
+            canvasStream = canvas.captureStream(30);
+
+            // 5) Mix audio: display audio (if any) + mic (if chosen)
+            const tracks = [];
+            if (canvasStream.getVideoTracks().length) {
+                tracks.push(canvasStream.getVideoTracks()[0]);
+            }
+
+            const audioTracks = [];
+            if (withSysAudio) {
+                const a = displayStream.getAudioTracks();
+                if (a && a.length) audioTracks.push(new MediaStream(a));
+            }
+            if (withMic) audioTracks.push(micStream);
+
+            if (audioTracks.length) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                destination = audioCtx.createMediaStreamDestination();
+
+                audioTracks.forEach(s => {
+                    const src = audioCtx.createMediaStreamSource(s);
+                    // Optional: add gain/filters here
+                    src.connect(destination);
+                });
+                mixedStream = new MediaStream([...tracks, ...destination.stream.getAudioTracks()]);
+            } else {
+                mixedStream = new MediaStream(tracks);
+            }
+
+            // 6) Preview and record
+            preview.srcObject = mixedStream;
+
+            const mime = pickSupportedMime();
+            recorder = new MediaRecorder(mixedStream, { mimeType: mime, videoBitsPerSecond: 6000000, audioBitsPerSecond: 128000 });
+
+            recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+            recorder.onstop = save;
+            recorder.start(1000); // 1s timeslices for resilience
+
+            startBtn.disabled = true;
+            pauseBtn.disabled = false;
+            stopBtn.disabled = false;
+        }
+
+        function pickSupportedMime() {
+            const candidates = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm'
+            ];
+            return candidates.find(MediaRecorder.isTypeSupported) || '';
+        }
+
+        function pause() {
+            if (recorder && recorder.state === 'recording') {
+                recorder.pause();
+                pauseBtn.disabled = true;
+                resumeBtn.disabled = false;
+            }
+        }
+
+        function resume() {
+            if (recorder && recorder.state === 'paused') {
+                recorder.resume();
+                pauseBtn.disabled = false;
+                resumeBtn.disabled = true;
+            }
+        }
+
+        function stop() {
+            if (recorder && recorder.state !== 'inactive') {
+                recorder.stop();
+            }
+            cleanup();
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            resumeBtn.disabled = true;
+            stopBtn.disabled = true;
+        }
+
+        function save() {
+            const blob = new Blob(chunks, { type: recorder.mimeType || 'video/webm' });
+            chunks = [];
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            a.download = `recording-${ts}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            URL.revokeObjectURL(url);
+            a.remove();
+        }
+
+        function cleanup() {
+            cancelAnimationFrame(animId);
+            [displayStream, micStream, camStream, canvasStream, mixedStream].forEach(s => {
+                if (!s) return;
+                (s.getTracks ? s.getTracks() : []).forEach(t => t.stop());
+            });
+            if (audioCtx) audioCtx.close();
+        }
+
+        startBtn.onclick = start;
+        pauseBtn.onclick = pause;
+        resumeBtn.onclick = resume;
+        stopBtn.onclick = stop; a
+
+        window.addEventListener('beforeunload', cleanup);
+    </script>
+</body>
+
+</html>
