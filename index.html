@@ -1,390 +1,545 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <title>Web Screen Recorder (High Quality)</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Quality Screen Recorder (with Microphone)</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: system-ui, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 20px;
-            line-height: 1.45;
         }
 
-        h2 {
-            margin: 0 0 10px;
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 640px;
+            width: 100%;
+            text-align: center;
         }
 
-        .row {
-            margin: 10px 0;
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2.2em;
+            font-weight: 400;
         }
 
-        button {
-            margin-right: 8px;
+        .quality-settings {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+
+        .quality-settings h3 {
+            margin-bottom: 15px;
+            color: #495057;
+        }
+
+        .setting-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+
+        select,
+        input[type="number"] {
             padding: 8px 12px;
-        }
-
-        label {
-            margin-right: 12px;
-        }
-
-        #stageWrap {
-            position: relative;
-            display: inline-block;
-        }
-
-        #preview {
-            width: 640px;
-            max-width: 100%;
-            background: #000;
-            margin-top: 12px;
-        }
-
-        #camOverlay {
-            position: absolute;
-            bottom: 12px;
-            right: 12px;
-            width: 200px;
+            border: 2px solid #e9ecef;
             border-radius: 8px;
-            overflow: hidden;
-            border: 2px solid #fff;
+            font-size: 14px;
+            min-width: 140px;
         }
 
-        #camOverlay[hidden] {
+        .toggles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .toggle {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 14px 22px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            min-width: 160px;
+        }
+
+        .btn-start {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+        }
+
+        .btn-start:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(40, 167, 69, 0.3);
+        }
+
+        .btn-stop {
+            background: linear-gradient(45deg, #dc3545, #e83e8c);
+            color: white;
+        }
+
+        .btn-stop:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            margin: 16px 0;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 500;
+            color: white;
+        }
+
+        .status.ready {
+            background: linear-gradient(45deg, #20bf6b, #0fb9b1);
+        }
+
+        .status.recording {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            animation: pulse 1.5s infinite;
+        }
+
+        .status.stopped {
+            background: linear-gradient(45deg, #3742fa, #2f3542);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .75
+            }
+        }
+
+        .timer {
+            font-size: 1.6em;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0 18px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .preview-container {
+            margin-top: 20px;
             display: none;
         }
 
-        #log {
+        .preview-video {
+            width: 100%;
+            max-width: 520px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            margin-bottom: 14px;
+        }
+
+        .download-section {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-download {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .file-info {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .error {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin: 14px 0;
+            display: none;
+        }
+
+        .note {
             font-size: 12px;
-            white-space: pre-wrap;
-            opacity: .85;
-            margin-top: 12px;
-            max-height: 180px;
-            overflow: auto;
+            color: #555;
+            margin-top: 8px;
         }
     </style>
 </head>
 
 <body>
-    <h2>Screen Recorder (High Quality)</h2>
+    <div class="container">
+        <h1>🎥 Screen Recorder</h1>
 
-    <div class="row">
-        <label><input type="checkbox" id="withMic" checked /> Mic</label>
-        <label><input type="checkbox" id="withCam" /> Webcam overlay</label>
-        <label><input type="checkbox" id="withSysAudio" checked /> Try system/tab audio</label>
-        <label><input type="checkbox" id="smoothOff" /> Disable image smoothing (sharper UI text)</label>
+        <div class="quality-settings">
+            <h3>Quality Settings</h3>
+            <div class="setting-group">
+                <label>Video Quality:</label>
+                <select id="videoQuality">
+                    <option value="1080p">1080p (1920x1080)</option>
+                    <option value="720p">720p (1280x720)</option>
+                    <option value="480p">480p (854x480)</option>
+                    <option value="4k">4K (3840x2160)</option>
+                    <option value="auto" selected>Auto (match source)</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Frame Rate:</label>
+                <select id="frameRate">
+                    <option value="60" selected>60 FPS</option>
+                    <option value="30">30 FPS</option>
+                    <option value="24">24 FPS</option>
+                    <option value="15">15 FPS</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label>Video Bitrate (kbps):</label>
+                <input type="number" id="bitrate" value="3000" min="1000" max="100000" step="500">
+            </div>
+        </div>
+
+        <div class="toggles">
+            <label class="toggle"><input type="checkbox" id="withMic" checked> Record microphone</label>
+            <label class="toggle"><input type="checkbox" id="withSysAudio" checked> Try system/tab audio</label>
+            <label class="toggle"><input type="checkbox" id="voiceHPF" checked> Voice high‑pass (cleaner speech)</label>
+            <label class="toggle"><input type="checkbox" id="noSmoothing" checked> Disable image smoothing</label>
+        </div>
+
+        <div>
+            <button id="startBtn" class="btn btn-start">Start Recording</button>
+            <button id="stopBtn" class="btn btn-stop" disabled>Stop Recording</button>
+        </div>
+
+        <div id="status" class="status ready">Ready to record</div>
+        <div id="timer" class="timer">00:00</div>
+        <div id="errorMessage" class="error"></div>
+
+        <div id="previewContainer" class="preview-container">
+            <video id="previewVideo" class="preview-video" controls></video>
+            <div class="download-section">
+                <button id="downloadBtn" class="btn btn-download">Download Recording</button>
+                <div id="fileInfo" class="file-info"></div>
+            </div>
+            <div class="note">Note: MP4 recording via MediaRecorder is limited across browsers. WebM is the most
+                compatible. Convert to MP4 after download if needed.</div>
+        </div>
     </div>
-
-    <div class="row">
-        <label>FPS:
-            <select id="fps">
-                <option value="30">30</option>
-                <option value="60" selected>60</option>
-            </select>
-        </label>
-        <label>Video bitrate:
-            <select id="vbr">
-                <option value="8000000">8 Mbps (1080p30)</option>
-                <option value="12000000" selected>12 Mbps (1080p60)</option>
-                <option value="20000000">20 Mbps (1440p30-60)</option>
-                <option value="35000000">35 Mbps (4K30)</option>
-                <option value="60000000">60 Mbps (4K60+)</option>
-            </select>
-        </label>
-        <label>Audio bitrate:
-            <select id="abr">
-                <option value="128000">128 kbps</option>
-                <option value="160000">160 kbps</option>
-                <option value="192000" selected>192 kbps</option>
-            </select>
-        </label>
-    </div>
-
-    <div class="row">
-        <button id="startBtn">Start</button>
-        <button id="pauseBtn" disabled>Pause</button>
-        <button id="resumeBtn" disabled>Resume</button>
-        <button id="stopBtn" disabled>Stop</button>
-    </div>
-
-    <div id="stageWrap">
-        <video id="preview" playsinline autoplay muted></video>
-        <video id="camOverlay" playsinline autoplay muted hidden></video>
-    </div>
-
-    <div id="log"></div>
 
     <script>
-        let displayStream, micStream, camStream, mixedStream, recorder;
-        let chunks = [];
-        let audioCtx, destination;
-        let canvas, ctx, canvasStream, animId;
-        let dispVideo, camVideo;
-        let usingRVFC = false;
+        class ScreenRecorder {
+            constructor() {
+                this.displayStream = null;
+                this.micStream = null;
+                this.mixedStream = null;
+                this.mediaRecorder = null;
+                this.chunks = [];
+                this.audioCtx = null;
+                this.destination = null;
+                this.timerInterval = null;
+                this.startTime = 0;
+                this.recordedBlob = null;
 
-        const $ = s => document.querySelector(s);
-        const log = (...args) => { const el = $('#log'); el.textContent += args.join(' ') + '\n'; el.scrollTop = el.scrollHeight; console.log(...args); };
+                this.initElements();
+                this.bindEvents();
+            }
 
-        const startBtn = $('#startBtn');
-        const pauseBtn = $('#pauseBtn');
-        const resumeBtn = $('#resumeBtn');
-        const stopBtn = $('#stopBtn');
-        const preview = $('#preview');
-        const camOverlay = $('#camOverlay');
+            initElements() {
+                this.videoQuality = document.getElementById('videoQuality');
+                this.frameRate = document.getElementById('frameRate');
+                this.bitrate = document.getElementById('bitrate');
+                this.withMic = document.getElementById('withMic');
+                this.withSysAudio = document.getElementById('withSysAudio');
+                this.voiceHPF = document.getElementById('voiceHPF');
+                this.noSmoothing = document.getElementById('noSmoothing');
 
-        function pickSupportedMime(candidates) {
-            return candidates.find(MediaRecorder.isTypeSupported) || '';
-        }
+                this.startBtn = document.getElementById('startBtn');
+                this.stopBtn = document.getElementById('stopBtn');
+                this.status = document.getElementById('status');
+                this.timer = document.getElementById('timer');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.previewContainer = document.getElementById('previewContainer');
+                this.previewVideo = document.getElementById('previewVideo');
+                this.downloadBtn = document.getElementById('downloadBtn');
+                this.fileInfo = document.getElementById('fileInfo');
+            }
 
-        async function start() {
-            try {
-                startBtn.disabled = true;
-                pauseBtn.disabled = true;
-                resumeBtn.disabled = true;
-                stopBtn.disabled = true;
-                $('#log').textContent = '';
+            bindEvents() {
+                this.startBtn.addEventListener('click', () => this.startRecording());
+                this.stopBtn.addEventListener('click', () => this.stopRecording());
+                this.downloadBtn.addEventListener('click', () => this.downloadRecording());
+            }
 
-                const withMic = $('#withMic').checked;
-                const withCam = $('#withCam').checked;
-                const withSysAudio = $('#withSysAudio').checked;
-                const smoothingOff = $('#smoothOff').checked;
-                const fps = parseInt($('#fps').value, 10);
-                const vbr = parseInt($('#vbr').value, 10);
-                const abr = parseInt($('#abr').value, 10);
-
-                // 1) Display capture: request high frame rate and large size (browser may clamp)
-                displayStream = await navigator.mediaDevices.getDisplayMedia({
+            getDisplayConstraints() {
+                const choice = this.videoQuality.value;
+                const fps = parseInt(this.frameRate.value, 10);
+                const map = {
+                    '480p': { width: { ideal: 854 }, height: { ideal: 480 } },
+                    '720p': { width: { ideal: 1280 }, height: { ideal: 720 } },
+                    '1080p': { width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    '4k': { width: { ideal: 3840 }, height: { ideal: 2160 } },
+                    'auto': {}
+                };
+                const dims = map[choice] || {};
+                return {
                     video: {
                         frameRate: { ideal: fps, max: fps },
-                        width: { ideal: 2560 },   // try QHD
-                        height: { ideal: 1440 },  // try QHD
-                        displaySurface: 'monitor' // hint
+                        displaySurface: 'monitor',
+                        ...dims
                     },
-                    audio: withSysAudio ? true : false
-                });
+                    // Request display (system/tab) audio if enabled
+                    audio: this.withSysAudio.checked ? true : false
+                };
+            }
 
-                // 2) Optional mic with cleaner voice
-                if (withMic) {
-                    micStream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            channelCount: 1,
-                            sampleRate: 48000,
-                            noiseSuppression: true,
-                            echoCancellation: true,
-                            autoGainControl: false
-                        }
-                    });
+            async startRecording() {
+                try {
+                    this.hideError();
+                    this.disableUIOnStart();
+
+                    // 1) Choose screen/monitor/window in picker
+                    this.displayStream = await navigator.mediaDevices.getDisplayMedia(this.getDisplayConstraints());
+
+                    // End when the user stops sharing from browser UI
+                    const dispTrack = this.displayStream.getVideoTracks()[0];
+                    dispTrack.addEventListener('ended', () => { if (this.mediaRecorder) this.stopRecording(); });
+
+                    // 2) Mic capture (separate permission)
+                    if (this.withMic.checked) {
+                        this.micStream = await navigator.mediaDevices.getUserMedia({
+                            audio: {
+                                channelCount: 1,
+                                sampleRate: 48000,
+                                noiseSuppression: true,
+                                echoCancellation: true,
+                                autoGainControl: false
+                            }
+                        });
+                    } else {
+                        this.micStream = null;
+                    }
+
+                    // 3) Mix audio: display audio (if any) + microphone (if enabled)
+                    const audioInputs = [];
+                    if (this.withSysAudio.checked) {
+                        const aTracks = this.displayStream.getAudioTracks();
+                        if (aTracks && aTracks.length) audioInputs.push(new MediaStream(aTracks));
+                    }
+                    if (this.micStream) audioInputs.push(this.micStream);
+
+                    let finalStream;
+                    if (audioInputs.length) {
+                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        this.destination = this.audioCtx.createMediaStreamDestination();
+
+                        const merger = this.audioCtx.createGain(); // overall
+                        merger.gain.value = 1.0;
+
+                        audioInputs.forEach((s) => {
+                            const src = this.audioCtx.createMediaStreamSource(s);
+                            // Independent gain per source (lower system a bit)
+                            const g = this.audioCtx.createGain();
+                            const isMic = (this.micStream && s === this.micStream);
+                            g.gain.value = isMic ? 1.0 : 0.85;
+
+                            if (isMic && this.voiceHPF.checked) {
+                                const hp = this.audioCtx.createBiquadFilter();
+                                hp.type = 'highpass';
+                                hp.frequency.value = 90;
+                                src.connect(hp).connect(g).connect(merger);
+                            } else {
+                                src.connect(g).connect(merger);
+                            }
+                        });
+
+                        merger.connect(this.destination);
+                        finalStream = new MediaStream([
+                            ...this.displayStream.getVideoTracks(),
+                            ...this.destination.stream.getAudioTracks()
+                        ]);
+                    } else {
+                        // Video-only or display-audio-only
+                        finalStream = this.displayStream;
+                    }
+                    this.mixedStream = finalStream;
+
+                    // 4) Configure recorder with chosen bitrate and codec
+                    const kbps = Math.max(1000, parseInt(this.bitrate.value, 10) || 12000);
+                    const mime = this.pickMime([
+                        'video/webm;codecs=vp9,opus',
+                        'video/webm;codecs=vp8,opus',
+                        'video/webm'
+                    ]);
+                    const options = {
+                        mimeType: mime,
+                        videoBitsPerSecond: kbps * 1000,
+                        audioBitsPerSecond: 192000
+                    };
+
+                    this.mediaRecorder = new MediaRecorder(this.mixedStream, options);
+                    this.chunks = [];
+                    this.mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
+                    this.mediaRecorder.onstop = () => this.handleStop();
+
+                    // 5) Start
+                    this.mediaRecorder.start(2000); // 2s chunks
+                    this.startTimer();
+                    this.updateStatus('🔴 Recording in progress...', 'recording');
+                } catch (err) {
+                    this.showError('Failed to start recording: ' + (err && err.message ? err.message : err));
+                    this.enableUIIdle();
+                    this.cleanup();
                 }
+            }
 
-                // 3) Optional webcam overlay
-                if (withCam) {
-                    camStream = await navigator.mediaDevices.getUserMedia({
-                        video: { width: 1280, height: 720, frameRate: 30 }
-                    });
-                    camOverlay.srcObject = camStream;
-                    camOverlay.hidden = false;
-                } else {
-                    camOverlay.hidden = true;
+            stopRecording() {
+                try {
+                    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                        this.mediaRecorder.stop();
+                    }
+                } catch { }
+                this.stopTimer();
+                this.updateStatus('⏹️ Recording stopped', 'stopped');
+                this.enableUIIdle();
+                this.cleanup(); // stop tracks and close audio context
+            }
+
+            handleStop() {
+                const mime = (this.mediaRecorder && this.mediaRecorder.mimeType) || 'video/webm';
+                this.recordedBlob = new Blob(this.chunks, { type: mime });
+                const url = URL.createObjectURL(this.recordedBlob);
+
+                this.previewVideo.src = url;
+                const sizeMB = (this.recordedBlob.size / (1024 * 1024)).toFixed(2);
+                const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+                this.fileInfo.textContent = `File size: ${sizeMB} MB | Format: ${ext.toUpperCase()}`;
+                this.previewContainer.style.display = 'block';
+
+                // Reset status
+                this.updateStatus('✅ Ready to record', 'ready');
+            }
+
+            pickMime(list) {
+                for (const t of list) { if (MediaRecorder.isTypeSupported(t)) return t; }
+                return '';
+            }
+
+            startTimer() {
+                this.startTime = Date.now();
+                this.timerInterval = setInterval(() => {
+                    const s = Math.floor((Date.now() - this.startTime) / 1000);
+                    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+                    const ss = String(s % 60).padStart(2, '0');
+                    this.timer.textContent = `${mm}:${ss}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
                 }
+            }
 
-                // 4) Build hidden video sources for composition
-                dispVideo = document.createElement('video');
-                dispVideo.srcObject = displayStream;
-                dispVideo.muted = true;
-                dispVideo.playsInline = true;
-                await dispVideo.play().catch(() => { });
+            updateStatus(text, cls) {
+                this.status.textContent = text;
+                this.status.className = 'status ' + cls;
+            }
 
-                camVideo = null;
-                if (withCam) {
-                    camVideo = document.createElement('video');
-                    camVideo.srcObject = camStream;
-                    camVideo.muted = true;
-                    camVideo.playsInline = true;
-                    await camVideo.play().catch(() => { });
-                }
+            disableUIOnStart() {
+                this.startBtn.disabled = true;
+                this.stopBtn.disabled = false;
+                this.previewContainer.style.display = 'none';
+            }
 
-                // 5) Canvas at captured native size (avoid scaling blur)
-                const trackSettings = displayStream.getVideoTracks()[0].getSettings();
-                const width = trackSettings.width || 1920;
-                const height = trackSettings.height || 1080;
+            enableUIIdle() {
+                this.startBtn.disabled = false;
+                this.stopBtn.disabled = true;
+            }
 
-                canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                ctx = canvas.getContext('2d', { alpha: false, desynchronize: true });
-                ctx.imageSmoothingEnabled = !smoothingOff;
+            downloadRecording() {
+                if (!this.recordedBlob) return;
+                const url = URL.createObjectURL(this.recordedBlob);
+                const a = document.createElement('a');
+                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                const ext = this.recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                a.href = url;
+                a.download = `screen-recording-${ts}.${ext}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
 
-                function drawCamOverlay() {
-                    const w = Math.round(width * 0.25);
-                    const h = Math.round(w * 9 / 16);
-                    const x = width - w - 16;
-                    const y = height - h - 16;
-                    const r = 12;
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(x + r, y);
-                    ctx.arcTo(x + w, y, x + w, y + h, r);
-                    ctx.arcTo(x + w, y + h, x, y + h, r);
-                    ctx.arcTo(x, y + h, x, y, r);
-                    ctx.arcTo(x, y, x + w, y, r);
-                    ctx.closePath();
-                    ctx.clip();
-                    ctx.drawImage(camVideo, x, y, w, h);
-                    ctx.restore();
-                }
+            showError(msg) {
+                this.errorMessage.textContent = msg;
+                this.errorMessage.style.display = 'block';
+            }
+            hideError() {
+                this.errorMessage.style.display = 'none';
+            }
 
-                // Prefer requestVideoFrameCallback for frame-accurate drawing
-                function drawRAF() {
-                    ctx.drawImage(dispVideo, 0, 0, width, height);
-                    if (camVideo) drawCamOverlay();
-                    animId = requestAnimationFrame(drawRAF);
-                }
-                function drawRVFC() {
-                    ctx.drawImage(dispVideo, 0, 0, width, height);
-                    if (camVideo) drawCamOverlay();
-                    dispVideo.requestVideoFrameCallback(drawRVFC);
-                }
-                usingRVFC = typeof dispVideo.requestVideoFrameCallback === 'function';
-                if (usingRVFC) dispVideo.requestVideoFrameCallback(drawRVFC); else animId = requestAnimationFrame(drawRAF);
-
-                // 6) Capture canvas at chosen FPS
-                canvasStream = canvas.captureStream(fps);
-
-                // 7) Mix audio: display (if any) + mic (if any), with simple leveling
-                const tracks = [];
-                if (canvasStream.getVideoTracks().length) tracks.push(canvasStream.getVideoTracks()[0]);
-
-                const audioInputs = [];
-                if (withSysAudio) {
-                    const a = displayStream.getAudioTracks();
-                    if (a && a.length) audioInputs.push(new MediaStream(a));
-                }
-                if (withMic) audioInputs.push(micStream);
-
-                if (audioInputs.length) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    destination = audioCtx.createMediaStreamDestination();
-
-                    const merger = audioCtx.createGain();
-                    merger.gain.value = 1.0;
-
-                    audioInputs.forEach((s, idx) => {
-                        const src = audioCtx.createMediaStreamSource(s);
-                        const gain = audioCtx.createGain();
-                        gain.gain.value = (withMic && s === micStream) ? 1.0 : 0.85; // keep tab/system audio slightly lower than voice
-
-                        if (withMic && s === micStream) {
-                            // Optional high-pass for voice clarity
-                            const hp = audioCtx.createBiquadFilter();
-                            hp.type = 'highpass';
-                            hp.frequency.value = 90;
-                            src.connect(hp).connect(gain).connect(merger);
-                        } else {
-                            src.connect(gain).connect(merger);
-                        }
-                    });
-
-                    merger.connect(destination);
-                    mixedStream = new MediaStream([...tracks, ...destination.stream.getAudioTracks()]);
-                } else {
-                    mixedStream = new MediaStream(tracks);
-                }
-
-                // 8) Preview the mixed stream (no CSS scaling of canvas; preview is only for monitoring)
-                preview.srcObject = mixedStream;
-                preview.muted = true;
-                await preview.play().catch(() => { });
-
-                // 9) Record with higher quality settings
-                const mime = pickSupportedMime([
-                    'video/webm;codecs=vp9,opus',
-                    'video/webm;codecs=vp8,opus',
-                    'video/webm'
-                ]) || undefined;
-
-                recorder = new MediaRecorder(mixedStream, {
-                    mimeType: mime,
-                    videoBitsPerSecond: vbr,
-                    audioBitsPerSecond: abr
-                });
-
-                recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-                recorder.onstop = save;
-                recorder.start(2000); // 2s chunks for continuity and memory safety
-
-                // Controls
-                pauseBtn.disabled = false;
-                stopBtn.disabled = false;
-
-                log('Recording started', `${width}x${height}@${fps}`, 'MIME:', recorder.mimeType || '(default)', 'VBR:', vbr, 'ABR:', abr);
-            } catch (err) {
-                console.error(err);
-                log('Error:', err.message || err);
-                cleanup();
-                startBtn.disabled = false;
+            cleanup() {
+                try {
+                    if (this.displayStream) this.displayStream.getTracks().forEach(t => t.stop());
+                    if (this.micStream) this.micStream.getTracks().forEach(t => t.stop());
+                    if (this.audioCtx) this.audioCtx.close();
+                } catch { }
             }
         }
 
-        function pause() {
-            if (recorder && recorder.state === 'recording') {
-                recorder.pause();
-                pauseBtn.disabled = true;
-                resumeBtn.disabled = false;
-                log('Paused');
-            }
-        }
-        function resume() {
-            if (recorder && recorder.state === 'paused') {
-                recorder.resume();
-                pauseBtn.disabled = false;
-                resumeBtn.disabled = true;
-                log('Resumed');
-            }
-        }
-        function stop() {
-            if (recorder && recorder.state !== 'inactive') {
-                recorder.stop();
-            }
-            cleanup();
-            startBtn.disabled = false;
-            pauseBtn.disabled = true;
-            resumeBtn.disabled = true;
-            stopBtn.disabled = true;
-            log('Stopped');
-        }
-
-        function save() {
-            const mime = recorder.mimeType || 'video/webm';
-            const blob = new Blob(chunks, { type: mime });
-            chunks = [];
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            const ts = new Date().toISOString().replace(/[:.]/g, '-');
-            a.download = `recording-${ts}.webm`;
-            document.body.appendChild(a);
-            a.click();
-            URL.revokeObjectURL(url);
-            a.remove();
-            log('Saved', a.download, `${(blob.size / 1024 / 1024).toFixed(1)} MB`);
-        }
-
-        function cleanup() {
-            if (!usingRVFC) cancelAnimationFrame(animId);
-            [displayStream, micStream, camStream, canvasStream, mixedStream].forEach(s => {
-                if (!s) return;
-                (s.getTracks ? s.getTracks() : []).forEach(t => { try { t.stop(); } catch { } });
-            });
-            if (audioCtx) { try { audioCtx.close(); } catch { } }
-        }
-
-        startBtn.onclick = start;
-        pauseBtn.onclick = pause;
-        resumeBtn.onclick = resume;
-        stopBtn.onclick = stop;
-
-        window.addEventListener('beforeunload', cleanup);
+        document.addEventListener('DOMContentLoaded', () => {
+            new ScreenRecorder();
+        });
     </script>
 </body>
 
