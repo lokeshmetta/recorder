@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High-Quality Screen Recorder (with Microphone)</title>
+    <title>High-Quality Screen Recorder (Enhanced)</title>
     <style>
         * {
             margin: 0;
@@ -85,6 +85,11 @@
             gap: 8px;
         }
 
+        .toggle.disabled {
+            opacity: 0.6;
+            background: #e9ecef;
+        }
+
         .btn {
             padding: 14px 22px;
             font-size: 16px;
@@ -96,6 +101,7 @@
             text-transform: uppercase;
             letter-spacing: 0.6px;
             min-width: 160px;
+            margin: 5px;
         }
 
         .btn-start {
@@ -116,6 +122,21 @@
         .btn-stop:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(220, 53, 69, 0.3);
+        }
+
+        .btn-pause {
+            background: linear-gradient(45deg, #ffc107, #ff9800);
+            color: white;
+        }
+
+        .btn-resume {
+            background: linear-gradient(45deg, #17a2b8, #20c997);
+            color: white;
+        }
+
+        .btn-pause:hover,
+        .btn-resume:hover {
+            transform: translateY(-2px);
         }
 
         .btn:disabled {
@@ -144,6 +165,14 @@
 
         .status.stopped {
             background: linear-gradient(45deg, #3742fa, #2f3542);
+        }
+
+        .status.paused {
+            background: linear-gradient(45deg, #ffc107, #ff9800);
+        }
+
+        .status.warning {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
         }
 
         @keyframes pulse {
@@ -185,10 +214,16 @@
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
+            margin-bottom: 15px;
         }
 
         .btn-download {
             background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-convert {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
             color: white;
         }
 
@@ -198,10 +233,20 @@
             border-radius: 8px;
             font-size: 13px;
             color: #6c757d;
+            margin-bottom: 10px;
         }
 
         .error {
             background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            margin: 14px 0;
+            display: none;
+        }
+
+        .warning {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
             color: white;
             padding: 12px;
             border-radius: 10px;
@@ -214,23 +259,65 @@
             color: #555;
             margin-top: 8px;
         }
+
+        .device-info {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: left;
+            display: none;
+        }
+
+        .conversion-progress {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🎥 Screen Recorder</h1>
+        <h1>🎥 Screen Recorder Pro</h1>
 
         <div class="quality-settings">
             <h3>Quality Settings</h3>
             <div class="setting-group">
+                <label>Recording Format:</label>
+                <select id="recordingFormat">
+                    <option value="webm" selected>WebM (Recommended)</option>
+                    <option value="mp4">MP4 (Browser Support Varies)</option>
+                </select>
+            </div>
+            <div class="setting-group">
                 <label>Video Quality:</label>
                 <select id="videoQuality">
-                    <option value="1080p">1080p (1920x1080)</option>
+                    <option value="1080p" selected>1080p (1920x1080)</option>
                     <option value="720p">720p (1280x720)</option>
                     <option value="480p">480p (854x480)</option>
                     <option value="4k">4K (3840x2160)</option>
-                    <option value="auto" selected>Auto (match source)</option>
+                    <option value="auto">Auto (match source)</option>
                 </select>
             </div>
             <div class="setting-group">
@@ -244,39 +331,59 @@
             </div>
             <div class="setting-group">
                 <label>Video Bitrate (kbps):</label>
-                <input type="number" id="bitrate" value="3000" min="1000" max="100000" step="500">
+                <input type="number" id="bitrate" value="5000" min="1000" max="50000" step="500">
             </div>
+            <div id="bitrateNote" class="note" style="text-align: right; margin-top: -5px; margin-bottom: 10px;"></div>
         </div>
 
         <div class="toggles">
-            <label class="toggle"><input type="checkbox" id="withMic" checked> Record microphone</label>
+            <label class="toggle" id="micToggle"><input type="checkbox" id="withMic" checked> Record microphone</label>
             <label class="toggle"><input type="checkbox" id="withSysAudio" checked> Try system/tab audio</label>
-            <label class="toggle"><input type="checkbox" id="voiceHPF" checked> Voice high‑pass (cleaner speech)</label>
+            <label class="toggle"><input type="checkbox" id="voiceHPF" checked> Voice high‑pass filter</label>
             <label class="toggle"><input type="checkbox" id="noSmoothing" checked> Disable image smoothing</label>
         </div>
 
+        <div id="deviceInfo" class="device-info"></div>
+        <div id="warningMessage" class="warning"></div>
+
         <div>
             <button id="startBtn" class="btn btn-start">Start Recording</button>
-            <button id="stopBtn" class="btn btn-stop" disabled>Stop Recording</button>
+            <button id="pauseBtn" class="btn btn-pause" style="display: none;">Pause</button>
+            <button id="resumeBtn" class="btn btn-resume" style="display: none;">Resume</button>
+            <button id="stopBtn" class="btn btn-stop" style="display: none;">Stop Recording</button>
         </div>
 
         <div id="status" class="status ready">Ready to record</div>
         <div id="timer" class="timer">00:00</div>
         <div id="errorMessage" class="error"></div>
 
+        <div id="conversionProgress" class="conversion-progress">
+            <div>Converting to MP4...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">0%</div>
+        </div>
+
         <div id="previewContainer" class="preview-container">
             <video id="previewVideo" class="preview-video" controls></video>
+            <div id="fileInfo" class="file-info"></div>
             <div class="download-section">
-                <button id="downloadBtn" class="btn btn-download">Download Recording</button>
-                <div id="fileInfo" class="file-info"></div>
+                <button id="downloadBtn" class="btn btn-download">Download WebM</button>
+                <button id="convertBtn" class="btn btn-convert">Convert & Download MP4</button>
             </div>
-            <div class="note">Note: MP4 recording via MediaRecorder is limited across browsers. WebM is the most
-                compatible. Convert to MP4 after download if needed.</div>
+            <div class="note">
+                WebM offers better compression and quality. MP4 conversion uses WebAssembly FFmpeg for broader
+                compatibility.
+            </div>
         </div>
     </div>
 
+    <!-- FFmpeg WebAssembly for MP4 conversion -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.6/ffmpeg.min.js"></script>
+
     <script>
-        class ScreenRecorder {
+        class ScreenRecorderPro {
             constructor() {
                 this.displayStream = null;
                 this.micStream = null;
@@ -287,36 +394,149 @@
                 this.destination = null;
                 this.timerInterval = null;
                 this.startTime = 0;
+                this.elapsedTimeInSeconds = 0;
                 this.recordedBlob = null;
+                this.ffmpeg = null;
+                this.microphoneAvailable = false;
 
                 this.initElements();
+                this.checkDeviceCapabilities();
                 this.bindEvents();
+                this.initFFmpeg();
+                this.updateRecommendedBitrate();
             }
 
             initElements() {
+                this.recordingFormat = document.getElementById('recordingFormat');
                 this.videoQuality = document.getElementById('videoQuality');
                 this.frameRate = document.getElementById('frameRate');
                 this.bitrate = document.getElementById('bitrate');
+                this.bitrateNote = document.getElementById('bitrateNote');
                 this.withMic = document.getElementById('withMic');
+                this.micToggle = document.getElementById('micToggle');
                 this.withSysAudio = document.getElementById('withSysAudio');
                 this.voiceHPF = document.getElementById('voiceHPF');
                 this.noSmoothing = document.getElementById('noSmoothing');
 
                 this.startBtn = document.getElementById('startBtn');
                 this.stopBtn = document.getElementById('stopBtn');
+                this.pauseBtn = document.getElementById('pauseBtn');
+                this.resumeBtn = document.getElementById('resumeBtn');
                 this.status = document.getElementById('status');
                 this.timer = document.getElementById('timer');
                 this.errorMessage = document.getElementById('errorMessage');
+                this.warningMessage = document.getElementById('warningMessage');
+                this.deviceInfo = document.getElementById('deviceInfo');
                 this.previewContainer = document.getElementById('previewContainer');
                 this.previewVideo = document.getElementById('previewVideo');
                 this.downloadBtn = document.getElementById('downloadBtn');
+                this.convertBtn = document.getElementById('convertBtn');
                 this.fileInfo = document.getElementById('fileInfo');
+                this.conversionProgress = document.getElementById('conversionProgress');
+                this.progressFill = document.getElementById('progressFill');
+                this.progressText = document.getElementById('progressText');
+            }
+
+            async checkDeviceCapabilities() {
+                // Check for MP4 recording support
+                const mp4Option = this.recordingFormat.querySelector('option[value="mp4"]');
+                if (!MediaRecorder.isTypeSupported('video/mp4')) {
+                    mp4Option.disabled = true;
+                    mp4Option.textContent = 'MP4 (Not Supported)';
+                }
+
+                try {
+                    // Check microphone availability
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    this.microphoneAvailable = devices.some(device => device.kind === 'audioinput');
+
+                    if (!this.microphoneAvailable) {
+                        this.withMic.checked = false;
+                        this.withMic.disabled = true;
+                        this.micToggle.classList.add('disabled');
+                        this.showDeviceInfo('⚠️ No microphone detected. Audio recording will use system/tab audio only.');
+                    } else {
+                        this.showDeviceInfo('🎤 Microphone available for recording.');
+                    }
+
+                    // Test microphone access if available and enabled
+                    if (this.microphoneAvailable && this.withMic.checked) {
+                        try {
+                            const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            testStream.getTracks().forEach(track => track.stop());
+                        } catch (err) {
+                            this.showWarning('Microphone permission denied or unavailable. Recording will continue without microphone audio.');
+                            this.withMic.checked = false;
+                        }
+                    }
+
+                } catch (err) {
+                    console.warn('Could not enumerate devices:', err);
+                    this.showWarning('Could not detect available devices. Some features may not work properly.');
+                }
+            }
+
+            async initFFmpeg() {
+                try {
+                    if (typeof FFmpeg !== 'undefined') {
+                        const { createFFmpeg, fetchFile } = FFmpeg;
+                        this.ffmpeg = createFFmpeg({
+                            log: false,
+                            corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+                        });
+                    }
+                } catch (err) {
+                    console.warn('FFmpeg initialization failed:', err);
+                    this.convertBtn.style.display = 'none';
+                }
             }
 
             bindEvents() {
                 this.startBtn.addEventListener('click', () => this.startRecording());
                 this.stopBtn.addEventListener('click', () => this.stopRecording());
-                this.downloadBtn.addEventListener('click', () => this.downloadRecording());
+                this.pauseBtn.addEventListener('click', () => this.pauseRecording());
+                this.resumeBtn.addEventListener('click', () => this.resumeRecording());
+                this.downloadBtn.addEventListener('click', () => {
+                    if (!this.recordedBlob) return;
+                    const extension = this.recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                    this.downloadRecording(extension);
+                });
+                this.convertBtn.addEventListener('click', () => this.convertAndDownload());
+
+                this.videoQuality.addEventListener('change', () => this.updateRecommendedBitrate());
+                this.frameRate.addEventListener('change', () => this.updateRecommendedBitrate());
+
+                // Update microphone settings when checkbox changes
+                this.withMic.addEventListener('change', () => {
+                    if (this.withMic.checked && !this.microphoneAvailable) {
+                        this.withMic.checked = false;
+                        this.showWarning('No microphone available on this device.');
+                    }
+                });
+            }
+
+            updateRecommendedBitrate() {
+                const quality = this.videoQuality.value;
+                const fps = this.frameRate.value;
+
+                // A map of bitrates (in kbps) for different quality/fps combinations
+                // These are good starting points for high-quality VP9/H.264 encoding.
+                const bitrateMap = {
+                    '4k': { '60': 40000, '30': 25000, '24': 20000, '15': 15000 },
+                    '1080p': { '60': 12000, '30': 8000, '24': 6000, '15': 4000 },
+                    '720p': { '60': 7500, '30': 5000, '24': 4000, '15': 2500 },
+                    '480p': { '60': 4000, '30': 2500, '24': 2000, '15': 1500 }
+                };
+
+                if (quality === 'auto') {
+                    this.bitrate.value = 8000; // A sensible default for 'auto'
+                    this.bitrateNote.textContent = 'Bitrate for "Auto" is a general default. Adjust manually.';
+                    return;
+                }
+
+                const recommendedBitrate = bitrateMap[quality]?.[fps] || 5000;
+                this.bitrate.value = recommendedBitrate;
+                this.bitrateNote.textContent = 'Recommended value based on quality and FPS.';
             }
 
             getDisplayConstraints() {
@@ -336,209 +556,394 @@
                         displaySurface: 'monitor',
                         ...dims
                     },
-                    // Request display (system/tab) audio if enabled
                     audio: this.withSysAudio.checked ? true : false
                 };
             }
 
             async startRecording() {
                 try {
-                    this.hideError();
+                    this.hideMessages();
                     this.disableUIOnStart();
 
-                    // 1) Choose screen/monitor/window in picker
+                    this.elapsedTimeInSeconds = 0;
+                    this.timer.textContent = '00:00';
+                    // 1) Get display stream
                     this.displayStream = await navigator.mediaDevices.getDisplayMedia(this.getDisplayConstraints());
 
-                    // End when the user stops sharing from browser UI
                     const dispTrack = this.displayStream.getVideoTracks()[0];
-                    dispTrack.addEventListener('ended', () => { if (this.mediaRecorder) this.stopRecording(); });
+                    dispTrack.addEventListener('ended', () => {
+                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                            this.stopRecording();
+                        }
+                    });
 
-                    // 2) Mic capture (separate permission)
-                    if (this.withMic.checked) {
-                        this.micStream = await navigator.mediaDevices.getUserMedia({
-                            audio: {
-                                channelCount: 1,
-                                sampleRate: 48000,
-                                noiseSuppression: true,
-                                echoCancellation: true,
-                                autoGainControl: false
-                            }
-                        });
-                    } else {
-                        this.micStream = null;
+                    // 2) Get microphone stream with enhanced error handling
+                    if (this.withMic.checked && this.microphoneAvailable) {
+                        try {
+                            this.micStream = await navigator.mediaDevices.getUserMedia({
+                                audio: {
+                                    channelCount: 1,
+                                    sampleRate: 48000,
+                                    noiseSuppression: true,
+                                    echoCancellation: true,
+                                    autoGainControl: false
+                                }
+                            });
+                        } catch (micError) {
+                            console.warn('Microphone access failed:', micError);
+                            this.showWarning('Microphone access failed. Recording will continue without microphone audio.');
+                            this.micStream = null;
+                        }
                     }
 
-                    // 3) Mix audio: display audio (if any) + microphone (if enabled)
+                    // 3) Mix audio streams
                     const audioInputs = [];
-                    if (this.withSysAudio.checked) {
-                        const aTracks = this.displayStream.getAudioTracks();
-                        if (aTracks && aTracks.length) audioInputs.push(new MediaStream(aTracks));
+                    if (this.withSysAudio.checked && this.displayStream.getAudioTracks().length > 0) {
+                        audioInputs.push(new MediaStream(this.displayStream.getAudioTracks()));
                     }
-                    if (this.micStream) audioInputs.push(this.micStream);
+                    if (this.micStream) {
+                        audioInputs.push(this.micStream);
+                    }
 
                     let finalStream;
-                    if (audioInputs.length) {
-                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                        this.destination = this.audioCtx.createMediaStreamDestination();
+                    if (audioInputs.length > 0) {
+                        try {
+                            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            this.destination = this.audioCtx.createMediaStreamDestination();
 
-                        const merger = this.audioCtx.createGain(); // overall
-                        merger.gain.value = 1.0;
+                            const merger = this.audioCtx.createGain();
+                            merger.gain.value = 1.0;
 
-                        audioInputs.forEach((s) => {
-                            const src = this.audioCtx.createMediaStreamSource(s);
-                            // Independent gain per source (lower system a bit)
-                            const g = this.audioCtx.createGain();
-                            const isMic = (this.micStream && s === this.micStream);
-                            g.gain.value = isMic ? 1.0 : 0.85;
+                            audioInputs.forEach((stream) => {
+                                const source = this.audioCtx.createMediaStreamSource(stream);
+                                const gainNode = this.audioCtx.createGain();
+                                const isMicStream = (this.micStream && stream === this.micStream);
+                                gainNode.gain.value = isMicStream ? 1.0 : 0.85;
 
-                            if (isMic && this.voiceHPF.checked) {
-                                const hp = this.audioCtx.createBiquadFilter();
-                                hp.type = 'highpass';
-                                hp.frequency.value = 90;
-                                src.connect(hp).connect(g).connect(merger);
-                            } else {
-                                src.connect(g).connect(merger);
-                            }
-                        });
+                                if (isMicStream && this.voiceHPF.checked) {
+                                    const highpass = this.audioCtx.createBiquadFilter();
+                                    highpass.type = 'highpass';
+                                    highpass.frequency.value = 90;
+                                    source.connect(highpass).connect(gainNode).connect(merger);
+                                } else {
+                                    source.connect(gainNode).connect(merger);
+                                }
+                            });
 
-                        merger.connect(this.destination);
-                        finalStream = new MediaStream([
-                            ...this.displayStream.getVideoTracks(),
-                            ...this.destination.stream.getAudioTracks()
-                        ]);
+                            merger.connect(this.destination);
+                            finalStream = new MediaStream([
+                                ...this.displayStream.getVideoTracks(),
+                                ...this.destination.stream.getAudioTracks()
+                            ]);
+                        } catch (audioError) {
+                            console.warn('Audio mixing failed:', audioError);
+                            finalStream = this.displayStream;
+                            this.showWarning('Audio mixing failed. Using display stream only.');
+                        }
                     } else {
-                        // Video-only or display-audio-only
                         finalStream = this.displayStream;
                     }
+
                     this.mixedStream = finalStream;
 
-                    // 4) Configure recorder with chosen bitrate and codec
-                    const kbps = Math.max(1000, parseInt(this.bitrate.value, 10) || 12000);
-                    const mime = this.pickMime([
-                        'video/webm;codecs=vp9,opus',
-                        'video/webm;codecs=vp8,opus',
-                        'video/webm'
-                    ]);
+                    // 4) Setup MediaRecorder with improved codec selection
+                    const bitrate = Math.max(1000, parseInt(this.bitrate.value, 10) || 5000);
+                    const mimeType = this.selectBestMimeType();
+                    if (!mimeType) {
+                        this.showError('No supported video format found for recording.');
+                        this.enableUIIdle();
+                        this.cleanup();
+                        return;
+                    }
+
                     const options = {
-                        mimeType: mime,
-                        videoBitsPerSecond: kbps * 1000,
-                        audioBitsPerSecond: 192000
+                        mimeType: mimeType,
+                        videoBitsPerSecond: bitrate * 1000,
+                        audioBitsPerSecond: 320000
                     };
 
                     this.mediaRecorder = new MediaRecorder(this.mixedStream, options);
                     this.chunks = [];
-                    this.mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
-                    this.mediaRecorder.onstop = () => this.handleStop();
 
-                    // 5) Start
-                    this.mediaRecorder.start(2000); // 2s chunks
+                    this.mediaRecorder.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
+                            this.chunks.push(event.data);
+                        }
+                    };
+
+                    this.mediaRecorder.onstop = () => this.handleStop();
+                    this.mediaRecorder.onerror = (event) => {
+                        this.showError('Recording error: ' + event.error);
+                        this.stopRecording();
+                    };
+
+                    // 5) Start recording
+                    this.mediaRecorder.start(1000); // 1s chunks for better stability
                     this.startTimer();
                     this.updateStatus('🔴 Recording in progress...', 'recording');
+
                 } catch (err) {
-                    this.showError('Failed to start recording: ' + (err && err.message ? err.message : err));
+                    this.showError('Failed to start recording: ' + (err.message || err));
                     this.enableUIIdle();
                     this.cleanup();
                 }
             }
 
-            stopRecording() {
-                try {
-                    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                        this.mediaRecorder.stop();
+            selectBestMimeType() {
+                const format = this.recordingFormat.value;
+
+                const webmTypes = [
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm;codecs=h264,opus',
+                    'video/webm'
+                ];
+
+                const mp4Types = [
+                    'video/mp4;codecs=h264,aac',
+                    'video/mp4'
+                ];
+
+                const typesToTest = (format === 'mp4') ? mp4Types : webmTypes;
+
+                for (const type of typesToTest) {
+                    if (MediaRecorder.isTypeSupported(type)) {
+                        return type;
                     }
-                } catch { }
-                this.stopTimer();
-                this.updateStatus('⏹️ Recording stopped', 'stopped');
-                this.enableUIIdle();
-                this.cleanup(); // stop tracks and close audio context
+                }
+
+                // Fallback if the chosen format has no supported mime types
+                if (format === 'mp4') {
+                    this.showWarning('MP4 recording not supported, falling back to WebM.');
+                    this.recordingFormat.value = 'webm';
+                    // Try webm types
+                    return webmTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+                }
+
+                return ''; // Should not happen if WebM is supported
             }
 
-            handleStop() {
-                const mime = (this.mediaRecorder && this.mediaRecorder.mimeType) || 'video/webm';
-                this.recordedBlob = new Blob(this.chunks, { type: mime });
-                const url = URL.createObjectURL(this.recordedBlob);
-
-                this.previewVideo.src = url;
-                const sizeMB = (this.recordedBlob.size / (1024 * 1024)).toFixed(2);
-                const ext = mime.includes('mp4') ? 'mp4' : 'webm';
-                this.fileInfo.textContent = `File size: ${sizeMB} MB | Format: ${ext.toUpperCase()}`;
-                this.previewContainer.style.display = 'block';
-
-                // Reset status
-                this.updateStatus('✅ Ready to record', 'ready');
-            }
-
-            pickMime(list) {
-                for (const t of list) { if (MediaRecorder.isTypeSupported(t)) return t; }
-                return '';
-            }
-
-            startTimer() {
-                this.startTime = Date.now();
-                this.timerInterval = setInterval(() => {
-                    const s = Math.floor((Date.now() - this.startTime) / 1000);
-                    const mm = String(Math.floor(s / 60)).padStart(2, '0');
-                    const ss = String(s % 60).padStart(2, '0');
-                    this.timer.textContent = `${mm}:${ss}`;
-                }, 1000);
-            }
-
-            stopTimer() {
-                if (this.timerInterval) {
-                    clearInterval(this.timerInterval);
-                    this.timerInterval = null;
+            pauseRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    this.mediaRecorder.pause();
+                    this.stopTimer();
+                    this.updateStatus('⏸️ Recording Paused', 'paused');
+                    this.pauseBtn.style.display = 'none';
+                    this.resumeBtn.style.display = 'inline-block';
                 }
             }
 
-            updateStatus(text, cls) {
-                this.status.textContent = text;
-                this.status.className = 'status ' + cls;
+            resumeRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+                    this.mediaRecorder.resume();
+                    this.startTimer();
+                    this.updateStatus('🔴 Recording in progress...', 'recording');
+                    this.pauseBtn.style.display = 'inline-block';
+                    this.resumeBtn.style.display = 'none';
+                }
             }
 
-            disableUIOnStart() {
-                this.startBtn.disabled = true;
-                this.stopBtn.disabled = false;
-                this.previewContainer.style.display = 'none';
+
+            stopRecording() {
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    this.mediaRecorder.stop(); // This will trigger the 'onstop' event handler
+                    this.stopTimer();
+                    this.updateStatus('⏹️ Processing video...', 'stopped');
+                }
             }
 
-            enableUIIdle() {
-                this.startBtn.disabled = false;
-                this.stopBtn.disabled = true;
-            }
-
-            downloadRecording() {
-                if (!this.recordedBlob) return;
+            handleStop() {
+                const mimeType = (this.mediaRecorder && this.mediaRecorder.mimeType) || 'video/webm';
+                this.recordedBlob = new Blob(this.chunks, { type: mimeType });
                 const url = URL.createObjectURL(this.recordedBlob);
+                this.previewVideo.src = url;
+                const sizeMB = (this.recordedBlob.size / (1024 * 1024)).toFixed(2);
+                const isMp4 = mimeType.includes('mp4');
+                const format = isMp4 ? 'MP4' : 'WebM';
+                this.fileInfo.textContent = `File size: ${sizeMB} MB | Format: ${format} | Quality: ${this.videoQuality.value} @ ${this.frameRate.value}fps`;
+                if (isMp4) {
+                    this.downloadBtn.textContent = 'Download MP4';
+                    this.convertBtn.style.display = 'none';
+                } else {
+                    this.downloadBtn.textContent = 'Download WebM';
+                    this.convertBtn.style.display = this.ffmpeg ? 'inline-block' : 'none';
+                }
+                this.previewContainer.style.display = 'block';
+                this.updateStatus('✅ Recording complete', 'ready');
+                this.enableUIIdle();
+                this.cleanup();
+            }
+
+            async convertAndDownload() {
+                if (!this.recordedBlob || !this.ffmpeg) {
+                    this.showError('Conversion not available or no recording found.');
+                    return;
+                }
+
+                try {
+                    this.conversionProgress.style.display = 'block';
+                    this.convertBtn.disabled = true;
+
+                    // Load FFmpeg if not already loaded
+                    if (!this.ffmpeg.isLoaded()) {
+                        this.updateProgress('Loading FFmpeg...', 10);
+                        await this.ffmpeg.load();
+                    }
+
+                    this.updateProgress('Preparing file...', 30);
+
+                    // Write input file
+                    const inputName = 'input.webm';
+                    const outputName = 'output.mp4';
+                    this.ffmpeg.FS('writeFile', inputName, await this.fetchFile(this.recordedBlob));
+
+                    this.updateProgress('Converting to MP4...', 50);
+
+                    // Convert with high quality settings
+                    await this.ffmpeg.run(
+                        '-i', inputName,
+                        '-c:v', 'libx264',
+                        '-preset', 'medium',
+                        '-crf', '18',
+                        '-c:a', 'aac',
+                        '-b:a', '256k',
+                        '-movflags', 'faststart',
+                        outputName
+                    );
+
+                    this.updateProgress('Finalizing...', 90);
+
+                    // Read output file
+                    const data = this.ffmpeg.FS('readFile', outputName);
+                    const mp4Blob = new Blob([data.buffer], { type: 'video/mp4' });
+
+                    // Download
+                    this.downloadBlob(mp4Blob, 'mp4');
+
+                    // Cleanup FFmpeg files
+                    this.ffmpeg.FS('unlink', inputName);
+                    this.ffmpeg.FS('unlink', outputName);
+
+                    this.updateProgress('Complete!', 100);
+                    setTimeout(() => {
+                        this.conversionProgress.style.display = 'none';
+                        this.convertBtn.disabled = false;
+                    }, 2000);
+
+                } catch (err) {
+                    this.showError('Conversion failed: ' + err.message);
+                    this.conversionProgress.style.display = 'none';
+                    this.convertBtn.disabled = false;
+                }
+            }
+
+            async fetchFile(blob) {
+                return new Uint8Array(await blob.arrayBuffer());
+            }
+
+            updateProgress(text, percent) {
+                this.progressText.textContent = text + ` (${percent}%)`;
+                this.progressFill.style.width = percent + '%';
+            }
+
+            downloadRecording(extension) {
+                if (!this.recordedBlob) return;
+                this.downloadBlob(this.recordedBlob, extension);
+            }
+
+            downloadBlob(blob, extension) {
+                const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                const ts = new Date().toISOString().replace(/[:.]/g, '-');
-                const ext = this.recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 a.href = url;
-                a.download = `screen-recording-${ts}.${ext}`;
+                a.download = `screen-recording-${timestamp}.${extension}`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             }
 
-            showError(msg) {
-                this.errorMessage.textContent = msg;
-                this.errorMessage.style.display = 'block';
+            startTimer() {
+                this.timerInterval = setInterval(() => {
+                    this.elapsedTimeInSeconds++;
+                    const mm = String(Math.floor(this.elapsedTimeInSeconds / 60)).padStart(2, '0');
+                    const ss = String(this.elapsedTimeInSeconds % 60).padStart(2, '0');
+                    this.timer.textContent = `${mm}:${ss}`;
+                }, 1000);
             }
-            hideError() {
+
+            stopTimer() {
+                clearInterval(this.timerInterval);
+                this.timerInterval = null;
+            }
+
+            updateStatus(text, className) {
+                this.status.textContent = text;
+                this.status.className = 'status ' + className;
+            }
+
+            disableUIOnStart() {
+                this.startBtn.style.display = 'none';
+                this.stopBtn.style.display = 'inline-block';
+                this.pauseBtn.style.display = 'inline-block';
+                this.resumeBtn.style.display = 'none';
+                this.previewContainer.style.display = 'none';
+            }
+
+            enableUIIdle() {
+                this.startBtn.style.display = 'inline-block';
+                this.startBtn.disabled = false;
+                this.stopBtn.style.display = 'none';
+                this.pauseBtn.style.display = 'none';
+                this.resumeBtn.style.display = 'none';
+
+
+            }
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.style.display = 'block';
+                setTimeout(() => this.hideMessages(), 8000);
+            }
+
+            showWarning(message) {
+                this.warningMessage.textContent = message;
+                this.warningMessage.style.display = 'block';
+                setTimeout(() => this.hideMessages(), 6000);
+            }
+
+            showDeviceInfo(message) {
+                this.deviceInfo.textContent = message;
+                this.deviceInfo.style.display = 'block';
+            }
+
+            hideMessages() {
                 this.errorMessage.style.display = 'none';
+                this.warningMessage.style.display = 'none';
             }
 
             cleanup() {
                 try {
-                    if (this.displayStream) this.displayStream.getTracks().forEach(t => t.stop());
-                    if (this.micStream) this.micStream.getTracks().forEach(t => t.stop());
-                    if (this.audioCtx) this.audioCtx.close();
-                } catch { }
+                    if (this.displayStream) {
+                        this.displayStream.getTracks().forEach(track => track.stop());
+                        this.displayStream = null;
+                    }
+                    if (this.micStream) {
+                        this.micStream.getTracks().forEach(track => track.stop());
+                        this.micStream = null;
+                    }
+                    if (this.audioCtx && this.audioCtx.state !== 'closed') {
+                        this.audioCtx.close();
+                        this.audioCtx = null;
+                    }
+                } catch (err) {
+                    console.warn('Cleanup error:', err);
+                }
             }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            new ScreenRecorder();
+            new ScreenRecorderPro();
         });
     </script>
 </body>
