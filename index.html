@@ -398,12 +398,18 @@
                 this.recordedBlob = null;
                 this.ffmpeg = null;
                 this.microphoneAvailable = false;
+                this.isMobileDevice = this.isMobile();
 
                 this.initElements();
                 this.checkDeviceCapabilities();
                 this.bindEvents();
                 this.initFFmpeg();
                 this.updateRecommendedBitrate();
+            }
+
+            isMobile() {
+                // A simple check for mobile user agents.
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             }
 
             initElements() {
@@ -438,6 +444,18 @@
             }
 
             async checkDeviceCapabilities() {
+                // Mobile device check
+                if (this.isMobileDevice) {
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                        this.showError('Screen recording is not supported on your mobile browser. Please try on a desktop computer.');
+                        this.startBtn.disabled = true;
+                        this.startBtn.textContent = 'Unsupported on Mobile';
+                        this.startBtn.style.background = '#6c757d';
+                    } else {
+                        this.showWarning('Mobile screen recording is experimental and may not work reliably.');
+                    }
+                }
+
                 // Check for MP4 recording support
                 const mp4Option = this.recordingFormat.querySelector('option[value="mp4"]');
                 if (!MediaRecorder.isTypeSupported('video/mp4')) {
@@ -542,6 +560,18 @@
             getDisplayConstraints() {
                 const choice = this.videoQuality.value;
                 const fps = parseInt(this.frameRate.value, 10);
+
+                // For mobile, use simpler constraints to maximize compatibility.
+                // Mobile browsers often ignore detailed constraints for screen capture.
+                if (this.isMobileDevice) {
+                    return {
+                        video: {
+                            frameRate: { ideal: fps, max: fps },
+                        },
+                        audio: this.withSysAudio.checked ? true : false
+                    };
+                }
+
                 const map = {
                     '480p': { width: { ideal: 854 }, height: { ideal: 480 } },
                     '720p': { width: { ideal: 1280 }, height: { ideal: 720 } },
