@@ -13,8 +13,8 @@
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'montserrat', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6cc1b8 0%, #dcb277 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -35,8 +35,8 @@
 
         h1 {
             color: #333;
-            margin-bottom: 20px;
-            font-size: 2.2em;
+            margin-bottom: 15px;
+            font-size: 2em;
             font-weight: 400;
         }
 
@@ -44,11 +44,11 @@
             background: #f8f9fa;
             padding: 20px;
             border-radius: 15px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
 
         .quality-settings h3 {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             color: #495057;
         }
 
@@ -57,7 +57,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
-            gap: 10px;
+            gap: 5px;
         }
 
         select,
@@ -72,7 +72,7 @@
         .toggles {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 5px;
             margin-bottom: 20px;
         }
 
@@ -82,7 +82,7 @@
             padding: 10px 12px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 5px;
         }
 
         .toggle.disabled {
@@ -93,7 +93,7 @@
         .btn {
             padding: 14px 22px;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 400;
             border: none;
             border-radius: 50px;
             cursor: pointer;
@@ -294,20 +294,33 @@
             width: 0%;
             transition: width 0.3s ease;
         }
+
+        .visualizer-container {
+            margin-bottom: 20px;
+        }
+
+        #micVisualizer {
+            width: 100%;
+            height: 60px;
+            background: #f0f2f5;
+            border-radius: 10px;
+            display: none;
+            /* Hidden by default */
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <h1>🎥 Screen Recorder Pro</h1>
+        <h1>🎥 Screen Recorder</h1>
 
         <div class="quality-settings">
             <h3>Quality Settings</h3>
             <div class="setting-group">
-                <label>Recording Format:</label>
-                <select id="recordingFormat">
+                <label for="recordingFormat">Recording Format:</label>
+                <select id="recordingFormat" title="Select recording format">
                     <option value="webm" selected>WebM (Recommended)</option>
-                    <option value="mp4">MP4 (Browser Support Varies)</option>
+                    <option value="mp4" title="MP4 (Browser Support Varies)">MP4 (Browser Support Varies)</option>
                 </select>
             </div>
             <div class="setting-group">
@@ -315,7 +328,7 @@
                 <select id="videoQuality">
                     <option value="1080p" selected>1080p (1920x1080)</option>
                     <option value="720p">720p (1280x720)</option>
-                    <option value="480p">480p (854x480)</option>
+                    <option value="480p" title="480p (854x480)">480p (854x480)</option>
                     <option value="4k">4K (3840x2160)</option>
                     <option value="auto">Auto (match source)</option>
                 </select>
@@ -323,7 +336,7 @@
             <div class="setting-group">
                 <label>Frame Rate:</label>
                 <select id="frameRate">
-                    <option value="60" selected>60 FPS</option>
+                    <option value="60" selected title="60 Frames Per Second">60 FPS</option>
                     <option value="30">30 FPS</option>
                     <option value="24">24 FPS</option>
                     <option value="15">15 FPS</option>
@@ -331,16 +344,30 @@
             </div>
             <div class="setting-group">
                 <label>Video Bitrate (kbps):</label>
-                <input type="number" id="bitrate" value="5000" min="1000" max="50000" step="500">
+                <input type="number" id="bitrate" value="5000" min="1000" max="50000" step="500"
+                    title="Set video bitrate in kilobits per second">
             </div>
             <div id="bitrateNote" class="note" style="text-align: right; margin-top: -5px; margin-bottom: 10px;"></div>
         </div>
 
         <div class="toggles">
-            <label class="toggle" id="micToggle"><input type="checkbox" id="withMic" checked> Record microphone</label>
-            <label class="toggle"><input type="checkbox" id="withSysAudio" checked> Try system/tab audio</label>
-            <label class="toggle"><input type="checkbox" id="voiceHPF" checked> Voice high‑pass filter</label>
-            <label class="toggle"><input type="checkbox" id="noSmoothing" checked> Disable image smoothing</label>
+            <label class="toggle" id="micToggle"><input type="checkbox" id="withMic" checked
+                    title="Record audio from your microphone"> Record microphone</label>
+            <div class="setting-group">
+                <label for="micSelect">Microphone:</label>
+                <select id="micSelect" style="max-width: 200px;" title="Select microphone device"></select>
+            </div>
+            <label class="toggle"><input type="checkbox" id="withSysAudio" checked
+                    title="Attempt to record system or tab audio"> Try system/tab audio</label>
+            <label class="toggle"><input type="checkbox" id="voiceHPF" checked
+                    title="Apply a high-pass filter to microphone audio to reduce low-frequency noise"> Voice high‑pass
+                filter</label>
+            <label class="toggle"><input type="checkbox" id="noSmoothing" checked
+                    title="Disable image smoothing for pixel-perfect recordings"> Disable image smoothing</label>
+        </div>
+
+        <div class="visualizer-container">
+            <canvas id="micVisualizer"></canvas>
         </div>
 
         <div id="deviceInfo" class="device-info"></div>
@@ -399,6 +426,8 @@
                 this.ffmpeg = null;
                 this.microphoneAvailable = false;
                 this.isMobileDevice = this.isMobile();
+                this.analyser = null;
+                this.visualizerFrame = null;
 
                 this.initElements();
                 this.checkDeviceCapabilities();
@@ -420,9 +449,11 @@
                 this.bitrateNote = document.getElementById('bitrateNote');
                 this.withMic = document.getElementById('withMic');
                 this.micToggle = document.getElementById('micToggle');
+                this.micSelect = document.getElementById('micSelect');
                 this.withSysAudio = document.getElementById('withSysAudio');
                 this.voiceHPF = document.getElementById('voiceHPF');
                 this.noSmoothing = document.getElementById('noSmoothing');
+                this.micVisualizer = document.getElementById('micVisualizer');
 
                 this.startBtn = document.getElementById('startBtn');
                 this.stopBtn = document.getElementById('stopBtn');
@@ -466,31 +497,61 @@
                 try {
                     // Check microphone availability
                     const devices = await navigator.mediaDevices.enumerateDevices();
-                    this.microphoneAvailable = devices.some(device => device.kind === 'audioinput');
+                    const audioInputDevices = devices.filter(device => device.kind === 'audioinput');
+                    this.microphoneAvailable = audioInputDevices.length > 0;
 
                     if (!this.microphoneAvailable) {
                         this.withMic.checked = false;
                         this.withMic.disabled = true;
                         this.micToggle.classList.add('disabled');
+                        this.micSelect.disabled = true;
                         this.showDeviceInfo('⚠️ No microphone detected. Audio recording will use system/tab audio only.');
                     } else {
                         this.showDeviceInfo('🎤 Microphone available for recording.');
-                    }
-
-                    // Test microphone access if available and enabled
-                    if (this.microphoneAvailable && this.withMic.checked) {
-                        try {
-                            const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                            testStream.getTracks().forEach(track => track.stop());
-                        } catch (err) {
-                            this.showWarning('Microphone permission denied or unavailable. Recording will continue without microphone audio.');
-                            this.withMic.checked = false;
-                        }
+                        this.populateMicSelect(audioInputDevices);
+                        this.initMicVisualizer();
                     }
 
                 } catch (err) {
                     console.warn('Could not enumerate devices:', err);
                     this.showWarning('Could not detect available devices. Some features may not work properly.');
+                }
+            }
+
+            populateMicSelect(devices) {
+                this.micSelect.innerHTML = '';
+                devices.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Microphone ${this.micSelect.options.length + 1}`;
+                    this.micSelect.appendChild(option);
+                });
+            }
+
+            async initMicVisualizer() {
+                if (!this.withMic.checked) return;
+
+                try {
+                    if (this.micStream) {
+                        this.micStream.getTracks().forEach(track => track.stop());
+                    }
+
+                    this.micStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            deviceId: { exact: this.micSelect.value },
+                            noiseSuppression: true,
+                            echoCancellation: true
+                        }
+                    });
+
+                    if (!this.audioCtx) {
+                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    const source = this.audioCtx.createMediaStreamSource(this.micStream);
+                    this.setupVisualizer(source);
+
+                } catch (err) {
+                    this.showWarning('Could not access microphone for visualizer.');
                 }
             }
 
@@ -529,7 +590,24 @@
                     if (this.withMic.checked && !this.microphoneAvailable) {
                         this.withMic.checked = false;
                         this.showWarning('No microphone available on this device.');
+                    } else if (this.withMic.checked) {
+                        this.micSelect.disabled = false;
+                        this.initMicVisualizer();
+                    } else {
+                        if (this.micStream) {
+                            this.micStream.getTracks().forEach(track => track.stop());
+                            this.micStream = null;
+                        }
+                        if (this.visualizerFrame) {
+                            cancelAnimationFrame(this.visualizerFrame);
+                        }
+                        this.micVisualizer.style.display = 'none';
+                        this.micSelect.disabled = true;
                     }
+                });
+
+                this.micSelect.addEventListener('change', () => {
+                    this.initMicVisualizer();
                 });
             }
 
@@ -607,16 +685,17 @@
                         }
                     });
 
-                    // 2) Get microphone stream with enhanced error handling
-                    if (this.withMic.checked && this.microphoneAvailable) {
+                    // 2) Get microphone stream if not already available
+                    if (this.withMic.checked && this.microphoneAvailable && !this.micStream) {
                         try {
                             this.micStream = await navigator.mediaDevices.getUserMedia({
                                 audio: {
+                                    deviceId: { exact: this.micSelect.value },
                                     channelCount: 1,
                                     sampleRate: 48000,
                                     noiseSuppression: true,
                                     echoCancellation: true,
-                                    autoGainControl: false
+                                    autoGainControl: true
                                 }
                             });
                         } catch (micError) {
@@ -638,7 +717,9 @@
                     let finalStream;
                     if (audioInputs.length > 0) {
                         try {
-                            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            if (!this.audioCtx) {
+                                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                            }
                             this.destination = this.audioCtx.createMediaStreamDestination();
 
                             const merger = this.audioCtx.createGain();
@@ -650,11 +731,16 @@
                                 const isMicStream = (this.micStream && stream === this.micStream);
                                 gainNode.gain.value = isMicStream ? 1.0 : 0.85;
 
-                                if (isMicStream && this.voiceHPF.checked) {
-                                    const highpass = this.audioCtx.createBiquadFilter();
-                                    highpass.type = 'highpass';
-                                    highpass.frequency.value = 90;
-                                    source.connect(highpass).connect(gainNode).connect(merger);
+                                if (isMicStream) {
+                                    if (!this.analyser) this.setupVisualizer(source);
+                                    if (this.voiceHPF.checked) {
+                                        const highpass = this.audioCtx.createBiquadFilter();
+                                        highpass.type = 'highpass';
+                                        highpass.frequency.value = 90;
+                                        source.connect(highpass).connect(gainNode).connect(merger);
+                                    } else {
+                                        source.connect(gainNode).connect(merger);
+                                    }
                                 } else {
                                     source.connect(gainNode).connect(merger);
                                 }
@@ -689,7 +775,7 @@
                     const options = {
                         mimeType: mimeType,
                         videoBitsPerSecond: bitrate * 1000,
-                        audioBitsPerSecond: 320000
+                        audioBitsPerSecond: 128000 // Lowered for Opus
                     };
 
                     this.mediaRecorder = new MediaRecorder(this.mixedStream, options);
@@ -717,6 +803,39 @@
                     this.enableUIIdle();
                     this.cleanup();
                 }
+            }
+
+            setupVisualizer(micSource) {
+                this.micVisualizer.style.display = 'block';
+                this.analyser = this.audioCtx.createAnalyser();
+                this.analyser.fftSize = 256;
+                micSource.connect(this.analyser);
+
+                const bufferLength = this.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const canvasCtx = this.micVisualizer.getContext('2d');
+
+                const draw = () => {
+                    this.visualizerFrame = requestAnimationFrame(draw);
+
+                    this.analyser.getByteFrequencyData(dataArray);
+
+                    canvasCtx.fillStyle = '#f0f2f5';
+                    canvasCtx.fillRect(0, 0, this.micVisualizer.width, this.micVisualizer.height);
+
+                    const barWidth = (this.micVisualizer.width / bufferLength) * 2.5;
+                    let barHeight;
+                    let x = 0;
+
+                    for (let i = 0; i < bufferLength; i++) {
+                        barHeight = dataArray[i] / 2;
+                        canvasCtx.fillStyle = `rgb(102, 126, 234, ${barHeight / 100})`;
+                        canvasCtx.fillRect(x, this.micVisualizer.height - barHeight, barWidth, barHeight);
+                        x += barWidth + 1;
+                    }
+                };
+
+                draw();
             }
 
             selectBestMimeType() {
@@ -758,8 +877,6 @@
                     this.mediaRecorder.pause();
                     this.stopTimer();
                     this.updateStatus('⏸️ Recording Paused', 'paused');
-                    this.pauseBtn.style.display = 'none';
-                    this.resumeBtn.style.display = 'inline-block';
                 }
             }
 
@@ -768,14 +885,12 @@
                     this.mediaRecorder.resume();
                     this.startTimer();
                     this.updateStatus('🔴 Recording in progress...', 'recording');
-                    this.pauseBtn.style.display = 'inline-block';
-                    this.resumeBtn.style.display = 'none';
                 }
             }
 
 
             stopRecording() {
-                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
                     this.mediaRecorder.stop(); // This will trigger the 'onstop' event handler
                     this.stopTimer();
                     this.updateStatus('⏹️ Processing video...', 'stopped');
