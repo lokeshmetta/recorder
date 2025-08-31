@@ -877,6 +877,8 @@
                     this.mediaRecorder.pause();
                     this.stopTimer();
                     this.updateStatus('⏸️ Recording Paused', 'paused');
+                    this.pauseBtn.style.display = 'none';
+                    this.resumeBtn.style.display = 'inline-block';
                 }
             }
 
@@ -885,6 +887,8 @@
                     this.mediaRecorder.resume();
                     this.startTimer();
                     this.updateStatus('🔴 Recording in progress...', 'recording');
+                    this.pauseBtn.style.display = 'inline-block';
+                    this.resumeBtn.style.display = 'none';
                 }
             }
 
